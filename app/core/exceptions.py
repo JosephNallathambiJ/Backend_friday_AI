@@ -58,3 +58,38 @@ class TaskCancelledError(FridayException):
 class DependencyMissingError(FridayException):
     def __init__(self, message: str, details: dict[str, Any] | None = None):
         super().__init__(message, code="DEPENDENCY_MISSING", status_code=503, details=details)
+
+
+class ModelNotInstalledError(FridayException):
+    def __init__(self, message: str, details: dict[str, Any] | None = None):
+        super().__init__(message, code="MODEL_NOT_INSTALLED", status_code=503, details=details)
+
+
+class ModelUnavailableError(FridayException):
+    def __init__(self, message: str, details: dict[str, Any] | None = None):
+        super().__init__(message, code="MODEL_UNAVAILABLE", status_code=503, details=details)
+
+
+class MalformedToolCallError(FridayException):
+    def __init__(self, message: str, details: dict[str, Any] | None = None):
+        super().__init__(message, code="MALFORMED_TOOL_CALL", status_code=422, details=details)
+
+
+class TaskBudgetExhaustedError(FridayException):
+    def __init__(self, message: str = "Task execution budget has been exhausted", details: dict[str, Any] | None = None):
+        super().__init__(message, code="BUDGET_EXHAUSTED", status_code=429, details=details)
+
+
+class ModelTimeoutError(FridayException):
+    def __init__(self, message: str = "Model request timed out", details: dict[str, Any] | None = None):
+        super().__init__(message, code="MODEL_TIMEOUT", status_code=504, details=details)
+
+
+class ToolUnavailableError(FridayException):
+    def __init__(self, message: str, details: dict[str, Any] | None = None):
+        super().__init__(message, code="TOOL_UNAVAILABLE", status_code=404, details=details)
+
+
+class ToolExecutionError(FridayException):
+    def __init__(self, message: str, details: dict[str, Any] | None = None):
+        super().__init__(message, code="TOOL_EXECUTION_ERROR", status_code=500, details=details)

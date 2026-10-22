@@ -100,9 +100,53 @@ class SendNotificationTool(BaseTool):
                 subtitle=params.get("subtitle"),
             )
             return ToolResult(
-                success=True, data=res, execution_time_ms=int((time.time() - t0) * 1000)
+                success=True,
+                data=res,
+                execution_time_ms=int((time.time() - t0) * 1000),
+                verified=True,
+                verification_details="Notification dispatched to macOS notification center.",
             )
         except Exception as e:
             return ToolResult(
                 success=False, error=str(e), execution_time_ms=int((time.time() - t0) * 1000)
             )
+
+
+class RunDiagnosticsInput(BaseModel):
+    category: str = Field(default="all", description="Diagnostics category: all, system, model, security")
+
+
+class RunDiagnosticsTool(BaseTool):
+    name = "run_diagnostics"
+    description = (
+        "Execute deep health and readiness diagnostics across all system components (AI model, DB, providers, tools)."
+    )
+    input_schema = RunDiagnosticsInput
+    required_capabilities = [CapabilityType.SYSTEM_INFO_READ.value]
+    risk_level = ToolRiskLevel.READ_ONLY
+    requires_approval = False
+
+    async def execute(self, parameters: dict[str, Any], dry_run: bool = False) -> ToolResult:
+        t0 = time.time()
+        try:
+            from app.db.session import async_session_factory
+            from app.services.system_service import SystemService
+
+            async with async_session_factory() as db:
+                diagnostics = await SystemService.get_diagnostics(db)
+
+            return ToolResult(
+                success=True,
+                data=diagnostics,
+                execution_time_ms=int((time.time() - t0) * 1000),
+                verified=True,
+                verification_details="Diagnostics executed across all active backend components.",
+            )
+        except Exception as e:
+            return ToolResult(
+                success=False,
+                error=str(e),
+                execution_time_ms=int((time.time() - t0) * 1000),
+                verified=False,
+            )
+

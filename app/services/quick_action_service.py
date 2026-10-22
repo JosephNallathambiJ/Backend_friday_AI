@@ -1,6 +1,7 @@
 """Quick-Action Registry and Execution Service for the HUD interface."""
 
 from typing import Any
+from uuid import uuid4
 
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,9 +42,18 @@ class QuickActionService:
 
     @classmethod
     def get_action(cls, action_id: str) -> QuickActionDefinition:
-        if action_id not in cls._actions:
-            raise NotFoundError(f"Quick action '{action_id}' not found.")
-        return cls._actions[action_id]
+        if action_id in cls._actions:
+            return cls._actions[action_id]
+
+        norm = action_id.lower().replace("-", "_").replace("?", "").replace(" ", "_").strip()
+        if norm in cls._actions:
+            return cls._actions[norm]
+
+        for act in cls._actions.values():
+            if act.label.lower() == action_id.lower() or act.id.lower() == norm:
+                return act
+
+        raise NotFoundError(f"Quick action '{action_id}' not found.")
 
     @classmethod
     async def execute_action(
@@ -142,6 +152,117 @@ class QuickActionService:
                 },
             }
 
+        elif action.id in {"arc_telemetry", "arc-telemetry"}:
+            status_data = await SystemService.get_system_status(session)
+            tasks = await TaskService.list_tasks(session=session, limit=10)
+            running_tasks = [t for t in tasks if getattr(t, "status", None) and str(t.status) == "running"]
+            return {
+                "action_id": action.id,
+                "label": "Arc Telemetry",
+                "result": {
+                    "frequency": "1420.405 MHz",
+                    "quantum_matrix": "SYNCED",
+                    "grid_protocol": "v8.4",
+                    "system_status": status_data.get("status", "online").upper(),
+                    "uptime_seconds": status_data.get("application", {}).get("uptime_seconds", 0),
+                    "active_tasks_count": len(running_tasks),
+                    "ai_provider": status_data.get("ai_provider", {}),
+                    "memory_percent": status_data.get("system_metrics", {}).get("memory_percent", 0.0),
+                    "cpu_percent": status_data.get("system_metrics", {}).get("cpu_percent", 0.0),
+                },
+            }
+
+        elif action.id in {"who_made_you", "who-made-you"}:
+            return {
+                "action_id": action.id,
+                "label": "Who Made You?",
+                "result": {
+                    "identity": "FRIDAY (GOJO Enterprise Edition)",
+                    "creator": "GOJO",
+                    "system": "GOJO OS v8.4.2 (Gojo Enterprise Edition)",
+                    "host": "Gojo Technologies Hub",
+                    "user": "gojo (UID: 1000 • Standard User Session)",
+                    "founder": "GOJO",
+                    "architecture": "Dual-Brain Tactical AI Cyber Architecture",
+                    "left_brain": "LiquidAI/lfm2.5-2.6b:q4_k_m (Tactical Planning & General Tasks)",
+                    "right_brain": "hf.co/RavichandranJ/Dolphin3-Cyber-8B-GGUF:Q4_K_M (Defensive Cybersecurity)",
+                    "statement": (
+                        "I am FRIDAY, created by GOJO for the GOJO Enterprise Tactical Defense HUD. "
+                        "I operate on an advanced Dual-Brain AI Cyber Architecture providing tactical command "
+                        "execution, system diagnostics, and autonomous defensive cybersecurity."
+                    ),
+                },
+            }
+
+        elif action.id in {"blue_team", "blue-team"}:
+            from app.agents.cyber_agent import cyber_agent
+
+            res = await cyber_agent.execute(
+                task_id=f"blue-team-{uuid4().hex[:6]}",
+                goal="Execute Blue Team defensive perimeter audit and security posture review",
+                parameters={"target": "127.0.0.1", "action": "defensive_posture"},
+                session=session,
+            )
+            report_str = res.data.get("markdown_report", "") if isinstance(res.data, dict) else str(res.data)
+            findings_list = res.data.get("findings", []) if isinstance(res.data, dict) else []
+            return {
+                "action_id": action.id,
+                "label": "Blue Team",
+                "result": {
+                    "status": "completed",
+                    "posture": "defensive",
+                    "summary": res.summary,
+                    "findings_count": len(findings_list),
+                    "findings": findings_list,
+                    "report": report_str,
+                    "actionable_recommendations": [
+                        "Enforce strict target authorization policies",
+                        "Maintain loopback isolation on internal API ports",
+                        "Redact secrets and sensitive tokens from terminal audit logs",
+                    ],
+                },
+            }
+
+        elif action.id in {"nmap_recon", "nmap-recon"}:
+            from app.agents.cyber_agent import cyber_agent
+            from app.security.target_authorization import target_auth_manager
+
+            target = (parameters or {}).get("target", "127.0.0.1")
+            is_authorized = target_auth_manager.is_authorized(target)
+            if not is_authorized:
+                return {
+                    "action_id": action.id,
+                    "label": "Nmap Recon",
+                    "result": {
+                        "status": "authorization_required",
+                        "target": target,
+                        "error": (
+                            f"Target '{target}' is not in authorized reconnaissance scope. "
+                            "Active network discovery requires explicit target authorization."
+                        ),
+                        "remediation": "Add target scope authorization via /api/v1/security/target-authorizations before scanning.",
+                        "policy_compliant": True,
+                    },
+                }
+
+            res = await cyber_agent.execute(
+                task_id=f"nmap-recon-{uuid4().hex[:6]}",
+                goal=f"Execute authorized network reconnaissance on {target}",
+                parameters={"target": target, "action": "port_scan"},
+                session=session,
+            )
+            return {
+                "action_id": action.id,
+                "label": "Nmap Recon",
+                "result": {
+                    "status": "completed",
+                    "target": target,
+                    "summary": res.summary,
+                    "open_ports": res.data.get("open_ports", []) if isinstance(res.data, dict) else [],
+                    "findings": res.data.get("findings", []) if isinstance(res.data, dict) else [],
+                },
+            }
+
         raise NotFoundError(f"No execution handler registered for '{action_id}'.")
 
 
@@ -208,5 +329,38 @@ QuickActionService.register(
         label="Commands & Help",
         description="Display supported tactical command syntax and execution modes.",
         category="Help",
+    )
+)
+# HUD Screenshot Quick-Action Buttons
+QuickActionService.register(
+    QuickActionDefinition(
+        id="arc_telemetry",
+        label="Arc Telemetry",
+        description="Stream real-time HUD telemetry, frequency, quantum matrix, and active metrics.",
+        category="HUD",
+    )
+)
+QuickActionService.register(
+    QuickActionDefinition(
+        id="who_made_you",
+        label="Who Made You?",
+        description="Truthful disclosure of FRIDAY AI origin, founder GOJO, and dual-brain architecture.",
+        category="Identity",
+    )
+)
+QuickActionService.register(
+    QuickActionDefinition(
+        id="blue_team",
+        label="Blue Team",
+        description="Execute automated defensive security posture audit and perimeter inspection.",
+        category="Cybersecurity",
+    )
+)
+QuickActionService.register(
+    QuickActionDefinition(
+        id="nmap_recon",
+        label="Nmap Recon",
+        description="Execute authorized network reconnaissance and port discovery with policy enforcement.",
+        category="Cybersecurity",
     )
 )

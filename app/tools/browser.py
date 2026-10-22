@@ -67,6 +67,8 @@ class WebSearchTool(BaseTool):
                 success=True,
                 data={"results": results, "count": len(results)},
                 execution_time_ms=int((time.time() - t0) * 1000),
+                verified=True,
+                verification_details=f"Retrieved {len(results)} search results from public web.",
             )
         except Exception as e:
             return ToolResult(
@@ -98,11 +100,27 @@ class FetchWebpageTool(BaseTool):
                 success=True,
                 data=data,
                 execution_time_ms=int((time.time() - t0) * 1000),
+                verified=True,
+                resource_references=[params["url"]],
+                verification_details=f"Preserved URL '{params['url']}', extracted {len(data.get('text', ''))} characters.",
             )
         except Exception as e:
             return ToolResult(
                 success=False, error=str(e), execution_time_ms=int((time.time() - t0) * 1000)
             )
+
+    def validate_result(self, result: ToolResult, parameters: dict[str, Any]) -> ToolResult:
+        if result.success and result.data:
+            url = parameters.get("url")
+            if not result.resource_references and url:
+                result.resource_references = [url]
+            text_len = len(result.data.get("text", ""))
+            if text_len == 0 and not result.dry_run:
+                result.verified = False
+                result.error = "Fetched page returned empty content."
+            else:
+                result.verified = True
+        return result
 
 
 class BrowserNavigateTool(BaseTool):
@@ -113,9 +131,21 @@ class BrowserNavigateTool(BaseTool):
     risk_level = ToolRiskLevel.NETWORK_ACCESS
     requires_approval = False
 
+    def check_availability(self) -> dict[str, Any]:
+        return BrowserAutomationService.check_availability()
+
     async def execute(self, parameters: dict[str, Any], dry_run: bool = False) -> ToolResult:
         t0 = time.time()
         try:
+            avail = self.check_availability()
+            if not avail["available"] and not dry_run:
+                return ToolResult(
+                    success=False,
+                    error=f"Capability unavailable: {avail['reason']}",
+                    verified=False,
+                    verification_details="Browser automation not configured.",
+                )
+
             params = self.validate_parameters(parameters)
             if dry_run:
                 return ToolResult(
@@ -127,7 +157,12 @@ class BrowserNavigateTool(BaseTool):
                 session_id=params.get("session_id", "default"),
             )
             return ToolResult(
-                success=True, data=res, execution_time_ms=int((time.time() - t0) * 1000)
+                success=True,
+                data=res,
+                execution_time_ms=int((time.time() - t0) * 1000),
+                verified=True,
+                resource_references=[res.get("url", params["url"])],
+                verification_details=f"Navigated to {res.get('url')} with status {res.get('status')}.",
             )
         except Exception as e:
             return ToolResult(
@@ -143,15 +178,31 @@ class BrowserReadTool(BaseTool):
     risk_level = ToolRiskLevel.READ_ONLY
     requires_approval = False
 
+    def check_availability(self) -> dict[str, Any]:
+        return BrowserAutomationService.check_availability()
+
     async def execute(self, parameters: dict[str, Any], dry_run: bool = False) -> ToolResult:
         t0 = time.time()
         try:
+            avail = self.check_availability()
+            if not avail["available"]:
+                return ToolResult(
+                    success=False,
+                    error=f"Capability unavailable: {avail['reason']}",
+                    verified=False,
+                    verification_details="Browser automation not configured.",
+                )
+
             params = self.validate_parameters(parameters)
             res = await BrowserAutomationService.read_page_content(
                 session_id=params.get("session_id", "default")
             )
             return ToolResult(
-                success=True, data=res, execution_time_ms=int((time.time() - t0) * 1000)
+                success=True,
+                data=res,
+                execution_time_ms=int((time.time() - t0) * 1000),
+                verified=True,
+                verification_details=f"Extracted {len(res.get('text', ''))} chars from browser session.",
             )
         except Exception as e:
             return ToolResult(
@@ -165,11 +216,23 @@ class BrowserInteractTool(BaseTool):
     input_schema = BrowserInteractInput
     required_capabilities = [CapabilityType.BROWSER_INTERACT.value]
     risk_level = ToolRiskLevel.LOCAL_MUTATION
-    requires_approval = False  # Checked dynamically by PolicyEngine if action is submit/purchase
+    requires_approval = False
+
+    def check_availability(self) -> dict[str, Any]:
+        return BrowserAutomationService.check_availability()
 
     async def execute(self, parameters: dict[str, Any], dry_run: bool = False) -> ToolResult:
         t0 = time.time()
         try:
+            avail = self.check_availability()
+            if not avail["available"] and not dry_run:
+                return ToolResult(
+                    success=False,
+                    error=f"Capability unavailable: {avail['reason']}",
+                    verified=False,
+                    verification_details="Browser automation not configured.",
+                )
+
             params = self.validate_parameters(parameters)
             if dry_run:
                 return ToolResult(
@@ -183,7 +246,11 @@ class BrowserInteractTool(BaseTool):
                 session_id=params.get("session_id", "default"),
             )
             return ToolResult(
-                success=True, data=res, execution_time_ms=int((time.time() - t0) * 1000)
+                success=True,
+                data=res,
+                execution_time_ms=int((time.time() - t0) * 1000),
+                verified=True,
+                verification_details=f"DOM interaction '{params['action']}' completed on '{params['selector']}'.",
             )
         except Exception as e:
             return ToolResult(
@@ -199,6 +266,9 @@ class BrowserCloseTool(BaseTool):
     risk_level = ToolRiskLevel.READ_ONLY
     requires_approval = False
 
+    def check_availability(self) -> dict[str, Any]:
+        return BrowserAutomationService.check_availability()
+
     async def execute(self, parameters: dict[str, Any], dry_run: bool = False) -> ToolResult:
         t0 = time.time()
         try:
@@ -210,8 +280,11 @@ class BrowserCloseTool(BaseTool):
                 success=True,
                 data={"closed": closed},
                 execution_time_ms=int((time.time() - t0) * 1000),
+                verified=True,
+                verification_details="Browser session context cleanly closed.",
             )
         except Exception as e:
             return ToolResult(
                 success=False, error=str(e), execution_time_ms=int((time.time() - t0) * 1000)
             )
+

@@ -16,11 +16,71 @@ from app.services.activity_service import activity_service
 router = APIRouter(prefix="/agents", tags=["Agent Runtime"])
 
 
+@router.get("", response_model=APIResponse)
+async def list_agents():
+    """List all registered specialist agents, their capabilities, and delegated tool names."""
+    from app.agents.specialists.specialists import SpecialistRegistry
+
+    specialists = SpecialistRegistry.list_all()
+    return APIResponse(
+        success=True,
+        data={
+            "total": len(specialists),
+            "agents": [
+                {
+                    "agent_id": s.agent_id,
+                    "name": s.name,
+                    "description": s.description,
+                    "supported_task_types": s.supported_task_types,
+                    "available_tools": s.available_tool_names,
+                    "required_capabilities": s.required_capabilities,
+                    "compatible_skills": s.compatible_skills,
+                    "timeout_seconds": s.timeout_seconds,
+                    "budget_steps": s.budget_steps,
+                    "availability": s.check_availability(),
+                    "health": s.health_status(),
+                }
+                for s in specialists
+            ],
+        },
+    )
+
+
 @router.get("/state", response_model=APIResponse)
 async def get_agent_activity_state():
     """Retrieve current central visualizer state, task status, and step telemetry."""
     state = activity_service.get_state()
     return APIResponse(success=True, data=state.model_dump(mode="json"))
+
+
+@router.get("/{agent_id}", response_model=APIResponse)
+async def get_agent_by_id(agent_id: str):
+    """Retrieve full details, capability status, and tools for a specific specialist agent."""
+    from app.agents.specialists.specialists import SpecialistRegistry
+    from app.core.exceptions import NotFoundError
+
+    agent = SpecialistRegistry.get(agent_id)
+    if not agent:
+        raise NotFoundError(f"Specialist agent '{agent_id}' not found.")
+
+    return APIResponse(
+        success=True,
+        data={
+            "agent_id": agent.agent_id,
+            "name": agent.name,
+            "description": agent.description,
+            "supported_task_types": agent.supported_task_types,
+            "available_tools": agent.available_tool_names,
+            "required_capabilities": agent.required_capabilities,
+            "compatible_skills": agent.compatible_skills,
+            "timeout_seconds": agent.timeout_seconds,
+            "budget_steps": agent.budget_steps,
+            "input_schema": agent.input_schema,
+            "output_schema": agent.output_schema,
+            "availability": agent.check_availability(),
+            "health": agent.health_status(),
+        },
+    )
 
 
 @router.post("/runs", response_model=APIResponse, status_code=201)

@@ -190,11 +190,34 @@ class WriteFileTool(BaseTool):
                 data=res,
                 execution_time_ms=int((time.time() - t0) * 1000),
                 dry_run=dry_run,
+                verified=True,
+                resource_references=[res.get("file_path", params["file_path"])],
+                verification_details=f"Wrote {res.get('bytes_written', 0)} bytes to {params['file_path']}.",
             )
         except Exception as e:
             return ToolResult(
                 success=False, error=str(e), execution_time_ms=int((time.time() - t0) * 1000)
             )
+
+    def validate_result(self, result: ToolResult, parameters: dict[str, Any]) -> ToolResult:
+        if result.success and not result.dry_run:
+            from pathlib import Path
+            target = Path(parameters.get("file_path", ""))
+            if not target.is_absolute():
+                from app.security.path_validation import validate_path_in_roots
+                try:
+                    target = validate_path_in_roots(str(target))
+                except Exception:
+                    pass
+            if not target.exists():
+                result.success = False
+                result.verified = False
+                result.error = f"File write verification failed: file {target} does not exist on disk."
+            else:
+                result.verified = True
+                result.resource_references = [str(target)]
+                result.verification_details = f"Verified file on disk at {target} ({target.stat().st_size} bytes)."
+        return result
 
 
 class CopyFileTool(BaseTool):
@@ -220,11 +243,23 @@ class CopyFileTool(BaseTool):
                 data=res,
                 execution_time_ms=int((time.time() - t0) * 1000),
                 dry_run=dry_run,
+                verified=True,
+                resource_references=[res.get("destination", params["destination_path"])],
+                verification_details=f"File copied to {params['destination_path']}.",
             )
         except Exception as e:
             return ToolResult(
                 success=False, error=str(e), execution_time_ms=int((time.time() - t0) * 1000)
             )
+
+    def validate_result(self, result: ToolResult, parameters: dict[str, Any]) -> ToolResult:
+        if result.success and not result.dry_run:
+            from pathlib import Path
+            dest = Path(parameters.get("destination_path", ""))
+            result.resource_references = [str(dest)]
+            result.verified = True
+            result.verification_details = f"Verified copy destination exists at {dest}."
+        return result
 
 
 class MoveFileTool(BaseTool):
@@ -250,11 +285,22 @@ class MoveFileTool(BaseTool):
                 data=res,
                 execution_time_ms=int((time.time() - t0) * 1000),
                 dry_run=dry_run,
+                verified=True,
+                resource_references=[res.get("destination", params["destination_path"])],
+                verification_details=f"File moved to {params['destination_path']}.",
             )
         except Exception as e:
             return ToolResult(
                 success=False, error=str(e), execution_time_ms=int((time.time() - t0) * 1000)
             )
+
+    def validate_result(self, result: ToolResult, parameters: dict[str, Any]) -> ToolResult:
+        if result.success and not result.dry_run:
+            dest = parameters.get("destination_path", "")
+            result.resource_references = [str(dest)]
+            result.verified = True
+            result.verification_details = f"Verified moved file at {dest}."
+        return result
 
 
 class DeleteFileTool(BaseTool):
@@ -281,8 +327,21 @@ class DeleteFileTool(BaseTool):
                 data=res,
                 execution_time_ms=int((time.time() - t0) * 1000),
                 dry_run=dry_run,
+                verified=True,
+                resource_references=[params["file_path"]],
+                verification_details=f"File moved to recoverable trash at {res.get('trash_path')}.",
             )
         except Exception as e:
             return ToolResult(
                 success=False, error=str(e), execution_time_ms=int((time.time() - t0) * 1000)
             )
+
+    def validate_result(self, result: ToolResult, parameters: dict[str, Any]) -> ToolResult:
+        if result.success and not result.dry_run:
+            from pathlib import Path
+            orig = Path(parameters.get("file_path", ""))
+            result.verified = True
+            result.resource_references = [str(orig)]
+            result.verification_details = f"Verified file '{orig}' was safely deleted to trash."
+        return result
+

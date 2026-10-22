@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import NotFoundError, SecurityPolicyError
 from app.core.time import utc_now
 from app.db.models.approval import ApprovalRequest
-from app.domain.enums import ApprovalStatus, ToolRiskLevel
+from app.db.models.task import Task
+from app.domain.enums import ApprovalStatus, TaskStatus, ToolRiskLevel
 from app.security.redaction import redact_dictionary
 
 
@@ -26,6 +27,18 @@ class ApprovalService:
     ) -> ApprovalRequest:
         redacted = redact_dictionary(arguments)
         expires_at = utc_now() + timedelta(minutes=expires_in_minutes)
+
+        # Ensure task exists in DB to prevent foreign key violations on ad-hoc or security checks
+        task_query = await session.execute(select(Task).where(Task.id == task_id))
+        if not task_query.scalars().first():
+            auto_task = Task(
+                id=task_id,
+                task_type="adhoc_security_eval",
+                summary=f"Evaluation approval for {tool_name}",
+                status=TaskStatus.RUNNING,
+            )
+            session.add(auto_task)
+            await session.flush()
 
         approval = ApprovalRequest(
             task_id=task_id,

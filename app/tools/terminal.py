@@ -70,8 +70,9 @@ class RunTerminalCommandTool(BaseTool):
                 timeout_seconds=timeout_sec,
             )
 
+            is_success = (res.exit_code == 0) and not res.timed_out
             return ToolResult(
-                success=(res.exit_code == 0),
+                success=is_success,
                 data={
                     "executable": res.executable,
                     "args": res.args,
@@ -80,11 +81,29 @@ class RunTerminalCommandTool(BaseTool):
                     "stderr": res.stderr,
                     "timed_out": res.timed_out,
                 },
+                error=res.stderr if not is_success else None,
                 execution_time_ms=res.execution_time_ms,
+                verified=True,
+                verification_details=f"Process exited with code {res.exit_code} (timed_out={res.timed_out}).",
             )
         except Exception as e:
             return ToolResult(
                 success=False,
                 error=str(e),
                 execution_time_ms=int((time.time() - start_time) * 1000),
+                verified=False,
             )
+
+    def validate_result(self, result: ToolResult, parameters: dict[str, Any]) -> ToolResult:
+        if result.data and isinstance(result.data, dict):
+            code = result.data.get("exit_code")
+            if code is not None and code != 0:
+                result.success = False
+                result.verified = True
+                if not result.error:
+                    result.error = f"Command execution returned non-zero exit code: {code}"
+            elif code == 0:
+                result.success = True
+                result.verified = True
+        return result
+

@@ -1,5 +1,7 @@
 """Contacts service with provider abstraction, search, and privacy minimization."""
 
+from typing import Any
+
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -104,3 +106,20 @@ class ContactsService:
         await db.delete(contact)
         await db.commit()
         return True
+
+    @staticmethod
+    def check_availability() -> dict[str, Any]:
+        """Check status of contacts integration provider."""
+        from app.core.config import settings
+
+        provider = settings.CONTACTS_PROVIDER.lower().strip()
+        if provider == "none" or not provider:
+            return {
+                "available": False,
+                "status": "NOT_CONFIGURED",
+                "reason": (
+                    "No contacts provider is currently configured (CONTACTS_PROVIDER='none'). "
+                    "Set CONTACTS_PROVIDER to 'local_sqlite' or 'macos_addressbook' in settings to enable contact operations."
+                ),
+            }
+        return {"available": True, "status": "AVAILABLE", "provider": provider, "reason": None}

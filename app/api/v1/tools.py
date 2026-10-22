@@ -42,6 +42,13 @@ async def list_tools():
     return APIResponse(data=items)
 
 
+@router.get("/diagnostics", response_model=APIResponse)
+async def diagnose_tools():
+    """Return live capability status, availability, and provider configuration for all tools."""
+    diagnostics = tool_registry.diagnose_all_tools()
+    return APIResponse(data={"total": len(diagnostics), "tools": diagnostics})
+
+
 @router.post("/execute", response_model=APIResponse)
 async def execute_tool(
     payload: ToolExecuteRequest,

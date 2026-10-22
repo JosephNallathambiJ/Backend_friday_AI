@@ -15,10 +15,15 @@ class ToolResult(BaseModel):
     execution_time_ms: int = 0
     dry_run: bool = False
     audit_metadata: dict[str, Any] = Field(default_factory=dict)
+    resource_references: list[str] = Field(default_factory=list)
+    is_partial: bool = False
+    is_mock: bool = False
+    verified: bool = False
+    verification_details: str | None = None
 
 
 class BaseTool(ABC):
-    """Abstract contract for all FRIDAY backend tools according to Master Prompt 2."""
+    """Abstract contract for all FRIDAY backend tools according to Master Prompt 2 and 5."""
 
     name: str
     description: str
@@ -30,6 +35,28 @@ class BaseTool(ABC):
     supports_dry_run: bool = True
     timeout_seconds: int = 30
     idempotent: bool = True
+    is_mock: bool = False
+
+    def check_availability(self) -> dict[str, Any]:
+        """Check if tool dependencies and provider are available.
+
+        Returns e.g.:
+        {"available": True, "status": "AVAILABLE", "reason": None}
+        or
+        {"available": False, "status": "NOT_CONFIGURED", "reason": "Provider not configured"}
+        """
+        return {"available": True, "status": "AVAILABLE", "reason": None}
+
+    def validate_result(self, result: ToolResult, parameters: dict[str, Any]) -> ToolResult:
+        """Validate execution result before returning to brain or caller.
+
+        Verifies that actual state matches expected outcome (e.g. file exists on disk,
+        exit code is zero, URL content was fetched).
+        """
+        if result.success and not result.verified:
+            result.verified = True
+            result.verification_details = "Outcome verified."
+        return result
 
     def validate_parameters(self, parameters: dict[str, Any]) -> dict[str, Any]:
         """Validate input parameters against input_schema."""

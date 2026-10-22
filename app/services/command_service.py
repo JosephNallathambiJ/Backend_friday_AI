@@ -110,20 +110,48 @@ class CommandService:
                 cls._idempotency_cache[request_id] = response_payload
             return response_payload
 
-        # Sync mode: execute run steps
+        # Sync mode: execute via Central Brain
         await activity_service.set_state(
-            state="executing_tool",
+            state="planning",
             task_id=task_id,
-            description=f"Executing tactical plan for '{command_text[:40]}'",
+            description=f"Formulating tactical plan for: '{command_text[:50]}'",
             current_step=1,
-            total_steps=len(run.plan_data.get("steps", [])),
+            total_steps=10,
         )
 
         try:
-            executed_run = await AgentRuntime.execute_run_steps(session, run.id)
-            final_status = executed_run.status.value if hasattr(executed_run.status, "value") else str(executed_run.status)
+            from app.services.brain_service import FridayBrain
 
-            approval_required = final_status == "waiting_for_approval"
+            brain_result = await FridayBrain.execute_tool_calling_loop(
+                session=session,
+                initial_prompt=command_text,
+                conversation_id=conversation_id,
+                task_id=task_id,
+                context=context,
+            )
+
+            final_status = brain_result.get("status", "completed")
+            approval_required = brain_result.get("approval_required", False)
+            final_summary = brain_result.get("final_response", "Operation complete.")
+
+            # Update AgentRun in DB
+            from sqlalchemy import select
+
+            from app.db.models.agent import AgentRun
+            from app.domain.enums import AgentRunStatus
+
+            stmt = select(AgentRun).where(AgentRun.id == run_id)
+            db_run = (await session.execute(stmt)).scalars().first()
+            if db_run:
+                if approval_required:
+                    db_run.status = AgentRunStatus.WAITING_FOR_APPROVAL
+                elif final_status == "completed":
+                    db_run.status = AgentRunStatus.COMPLETED
+                    db_run.result_summary = final_summary
+                else:
+                    db_run.status = AgentRunStatus.FAILED
+                    db_run.error_message = brain_result.get("error")
+                await session.commit()
 
             if approval_required:
                 await activity_service.set_state(
@@ -141,23 +169,23 @@ class CommandService:
                 await activity_service.set_state(
                     state="completed",
                     task_id=task_id,
-                    description=executed_run.result_summary or "Operation complete.",
+                    description=final_summary,
                 )
                 await event_bus.publish(
                     event_type="command.completed",
                     task_id=task_id,
-                    payload={"run_id": run_id, "result": executed_run.result_summary},
+                    payload={"run_id": run_id, "result": final_summary},
                 )
             else:
                 await activity_service.set_state(
                     state="error",
                     task_id=task_id,
-                    error_category=executed_run.error_message,
+                    error_category=brain_result.get("error"),
                 )
                 await event_bus.publish(
                     event_type="command.failed",
                     task_id=task_id,
-                    payload={"run_id": run_id, "error": executed_run.error_message},
+                    payload={"run_id": run_id, "error": brain_result.get("error")},
                 )
 
             response_payload = {
@@ -169,9 +197,10 @@ class CommandService:
                 "approval_required": approval_required,
                 "event_ref": f"/api/v1/events?task_id={task_id}",
                 "result": {
-                    "summary": executed_run.result_summary,
-                    "plan": executed_run.plan_data,
-                    "error": executed_run.error_message,
+                    "summary": final_summary,
+                    "plan": brain_result.get("plan", run.plan_data),
+                    "executed_tools": brain_result.get("executed_tools", []),
+                    "error": brain_result.get("error"),
                 },
             }
 

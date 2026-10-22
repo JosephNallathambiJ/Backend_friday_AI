@@ -14,7 +14,10 @@ from app.core.logging import logger
 from app.db.models.terminal import TerminalCommandHistory, TerminalSession
 from app.realtime.event_bus import event_bus
 from app.services.activity_service import activity_service
-from app.services.command_runner import COMMAND_PROFILES, CommandRunnerService
+from app.services.command_runner import (
+    COMMAND_PROFILES,
+    CommandRunnerService,
+)
 
 
 class TerminalSessionService:
@@ -277,3 +280,26 @@ class TerminalSessionService:
         term_session.is_active = False
         await session.commit()
         return {"session_id": session_id, "active": False, "closed": True}
+
+    @classmethod
+    async def interrupt_session(
+        cls,
+        session: AsyncSession,
+        session_id: str,
+        user_id: str = "local_user",
+    ) -> dict[str, Any]:
+        """Interrupt and cancel any running command in session (alias for cancellation)."""
+        return await cls.cancel_active_command(session=session, session_id=session_id, user_id=user_id)
+
+    @classmethod
+    def get_terminal_motd(cls) -> str:
+        """Return Linux MOTD banner matching HUD terminal interface."""
+        return (
+            "Linux fridey-os 6.8.0-gojo-arm64 #1 SMP GNU/Linux\n"
+            "GOJO OS v8.4.2 (Gojo Enterprise Edition)\n"
+            "* Host:      Gojo Technologies Hub\n"
+            "* User:      gojo (UID: 1000 • Standard User Session)\n"
+            "* Founder:   GOJO\n"
+            "* Terminal:  bash 5.1.26 / zsh 5.9 (xterm-256color)\n"
+            "Type 'help' for linux commands, or 'sudo su' to elevate to root.\n"
+        )

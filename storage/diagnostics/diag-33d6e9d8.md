@@ -1,0 +1,29 @@
+# FRIDAY AI — System Diagnostics & Health Audit Report
+**Job ID:** `diag-33d6e9d8` | **Job Type:** `DIAGNOSE`
+**Execution Timestamp:** 2026-10-22 09:33:57 UTC
+**Overall Status:** **FAILED**
+**Checks Summary:** 6 Passed | 2 Failed | 0 Skipped | 0 Blocked
+
+## 1. Executive Summary
+All diagnostic health checks completed.
+
+## 2. Check Results Breakdown
+| Check Name | Category | Status | Duration (ms) | Details |
+|---|---|---|---|---|
+| `python_syntax_and_ast_integrity` | Static Code | ✅ PASS | 67.57 | Parsed 147 Python source files. Syntax clean. |
+| `critical_module_imports` | Imports | ❌ FAIL | 0.25 | Failed to import 1 modules: ['app.db.database'] |
+| `configuration_and_environment` | Configuration | ✅ PASS | 0.0 | Configuration validated against operational schema. |
+| `api_routes_and_endpoints` | API | ✅ PASS | 0.01 | Verified 4 registered API routes. No duplicate collision issues. |
+| `database_connectivity_and_health` | Database | ❌ FAIL | 0.06 | Database connectivity check failed: No module named 'app.db.database' |
+| `tool_and_agent_registrations` | Registry | ✅ PASS | 0.08 | Verified 40 registered tools and 21 specialist agents. |
+| `dual_brain_models_and_ollama` | Model | ✅ PASS | 20.14 | Dual-brain status checked. Ollama reachable=True. Left: LiquidAI/lfm2.5-2.6b:q4_k_m, Right: hf.co/RavichandranJ/Dolphin3-Cyber-8B-GGUF:Q4_K_M. |
+| `audio_subsystem_and_speech_health` | Audio | ✅ PASS | 0.3 | Audio subsystem ready. Temp directory writable. Whisper STT: optional (fallback active), TTS engine: /usr/bin/say. |
+
+## 3. Severity-Ranked Findings
+| Severity | Category | Title | Location | Confirmed Evidence | Suggested Fix |
+|---|---|---|---|---|---|
+| **INFO** | Model | Left Brain Model 'LiquidAI/lfm2.5-2.6b:q4_k_m' Not Installed in Ollama | `System/Runtime` | installed_models=['hf.co/RavichandranJ/Dolphin3-Cyber-8B-GGUF:Q4_K_M', 'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M', 'gemma4:12b'] | Pull model: `ollama pull LiquidAI/lfm2.5-2.6b:q4_k_m`. |
+| **HIGH** | Imports | Module Import Failure: app.db.database | `System/Runtime` | No module named 'app.db.database' | Check dependencies, circular imports, or syntax in app.db.database. |
+| **CRITICAL** | Database | Database Connection Failed | `System/Runtime` | No module named 'app.db.database' | Verify DATABASE_URL and database service availability. |
+
+## 4. Remaining Risks and Recommendations

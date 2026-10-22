@@ -4,8 +4,9 @@ import shutil
 
 from fastapi import APIRouter, Depends, File, Response, UploadFile
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import verify_api_key
+from app.api.dependencies import get_db, verify_api_key
 from app.domain.schemas import APIResponse
 from app.realtime.event_bus import event_bus
 from app.services.activity_service import activity_service
@@ -121,3 +122,27 @@ async def synthesize_speech(payload: SynthesizeRequest):
         await event_bus.publish(event_type="voice.error", payload={"error": str(e)})
         await activity_service.set_state(state="error", error_category=str(e))
         raise
+
+
+class VoiceCommandRequest(BaseModel):
+    command: str = Field(..., min_length=1, description="Transcribed voice command")
+    conversation_id: str | None = None
+
+
+@router.post("/command", response_model=APIResponse)
+async def execute_voice_command(
+    payload: VoiceCommandRequest,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(verify_api_key),
+):
+    """Route voice-transcribed command into the single authoritative execution pipeline."""
+    from app.services.command_service import CommandService
+
+    result = await CommandService.process_command(
+        session=db,
+        command_text=payload.command,
+        conversation_id=payload.conversation_id,
+        context={"channel": "voice", "locale": "en-US"},
+    )
+    return APIResponse(success=True, data=result)
+

@@ -5,17 +5,14 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.logging import logger
 from app.domain.enums import MessageRole, TaskStatus
 from app.domain.protocols import ChatMessage
 from app.domain.schemas import ChatRequest
-from app.providers.registry import provider_registry
-from app.services.approval_service import ApprovalService
+from app.services.brain_service import FridayBrain
 from app.services.conversation_service import ConversationService
 from app.services.memory_service import MemoryService
 from app.services.retrieval_service import RetrievalService
 from app.services.task_service import TaskService
-from app.tools.registry import tool_registry
 
 
 class OrchestrationService:
@@ -92,120 +89,37 @@ class OrchestrationService:
                 )
             )
 
-        # 5. Format available tools for Ollama/provider
-        tools_spec: list[dict[str, Any]] | None = None
-        if request.enable_tools:
-            available_tools = tool_registry.list_tools()
-            tools_spec = [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": t.name,
-                        "description": t.description,
-                        "parameters": t.parameters_schema,
-                    },
-                }
-                for t in available_tools
-            ]
+        # 5. Execute unified reasoning & tool execution via FridayBrain
+        brain_result = await FridayBrain.execute_tool_calling_loop(
+            session=session,
+            initial_prompt=request.message,
+            conversation_id=conversation.id,
+            task_id=task.id,
+            max_iterations=settings.MAX_ORCHESTRATION_STEPS,
+        )
 
-        # 6. Execute bounded loop (max steps)
-        provider = provider_registry.get()
-        model_name = request.model or settings.DEFAULT_LOCAL_MODEL
-        step = 0
-        final_content = ""
+        final_content = brain_result.get("final_response", "Operation completed.")
         approval_request_info = None
-
-        while step < settings.MAX_ORCHESTRATION_STEPS:
-            step += 1
+        if brain_result.get("approval_required"):
+            approval_request_info = {
+                "approval_id": brain_result.get("approval_id"),
+                "tool_name": brain_result.get("tool"),
+                "status": "awaiting_approval",
+            }
             await TaskService.update_status(
                 session,
                 task.id,
-                TaskStatus.RUNNING,
-                f"Orchestration step {step}: calling model {model_name}",
+                TaskStatus.AWAITING_APPROVAL,
+                f"Awaiting approval for {brain_result.get('tool')}",
             )
 
-            response = await provider.chat_complete(
-                messages=messages,
-                model=model_name,
-                temperature=request.temperature or 0.7,
-                tools=tools_spec,
-            )
-
-            # Check if model proposed a tool call
-            if response.tool_calls:
-                tool_call = response.tool_calls[0]
-                fn = tool_call.get("function", {})
-                tool_name = fn.get("name")
-                tool_args = fn.get("arguments", {})
-
-                logger.info(f"Model proposed tool: {tool_name} with args: {tool_args}")
-                tool_instance = tool_registry.get_tool(tool_name)
-
-                # Check if approval is required
-                if tool_instance.requires_approval:
-                    approval = await ApprovalService.create_approval_request(
-                        session=session,
-                        task_id=task.id,
-                        tool_name=tool_name,
-                        action_description=f"Model proposed executing {tool_name} with parameters: {tool_args}",
-                        risk_level=tool_instance.risk_level,
-                        arguments=tool_args,
-                    )
-                    await TaskService.update_status(
-                        session,
-                        task.id,
-                        TaskStatus.AWAITING_APPROVAL,
-                        f"Awaiting approval for {tool_name} (ID: {approval.id})",
-                    )
-                    approval_request_info = {
-                        "approval_id": approval.id,
-                        "tool_name": tool_name,
-                        "status": "awaiting_approval",
-                    }
-                    final_content = (
-                        f"Action required: The tool '{tool_name}' requires approval before execution. "
-                        f"Approval request ID: {approval.id}"
-                    )
-                    break
-
-                # Execute tool directly if read-only
-                tool_res = await tool_registry.execute_tool(
-                    name=tool_name,
-                    parameters=tool_args,
-                    session=session,
-                    task_id=task.id,
-                )
-
-                # Append assistant tool call proposal and tool result to messages
-                messages.append(
-                    ChatMessage(
-                        role=MessageRole.ASSISTANT,
-                        content="",
-                        tool_calls=[tool_call],
-                    )
-                )
-                messages.append(
-                    ChatMessage(
-                        role=MessageRole.TOOL,
-                        content=str(
-                            tool_res.data if tool_res.success else f"Tool Error: {tool_res.error}"
-                        ),
-                        name=tool_name,
-                    )
-                )
-                continue
-
-            # Model produced a text response
-            final_content = response.content
-            break
-
-        # 7. Persist assistant message
+        # 6. Persist assistant message
         assistant_msg = await ConversationService.add_message(
             session=session,
             conversation_id=conversation.id,
             role=MessageRole.ASSISTANT,
             content=final_content,
-            metadata_json={"steps": step, "task_id": task.id},
+            metadata_json={"steps": brain_result.get("iterations", 1), "task_id": task.id},
         )
 
         if not approval_request_info:
@@ -223,5 +137,5 @@ class OrchestrationService:
             "content": final_content,
             "task_id": task.id,
             "approval_required": approval_request_info,
-            "steps": step,
+            "steps": brain_result.get("iterations", 1),
         }

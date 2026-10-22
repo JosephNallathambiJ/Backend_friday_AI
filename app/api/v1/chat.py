@@ -34,6 +34,22 @@ async def chat(
     return APIResponse(data=result)
 
 
+@router.post("/coordinator", response_model=APIResponse)
+async def chat_coordinator(
+    payload: ChatRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Execute conversational chat coordinated by ChatbotAgent ('FRIDAY's Mouth')."""
+    from app.agents.chatbot_agent import chatbot_agent
+
+    result = await chatbot_agent.handle_message(
+        message=payload.message,
+        conversation_id=payload.conversation_id,
+        session=db,
+    )
+    return APIResponse(success=True, data=result.model_dump())
+
+
 @router.post("/stream")
 async def chat_stream(
     payload: ChatRequest,

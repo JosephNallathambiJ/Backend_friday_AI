@@ -5,13 +5,12 @@ import shutil
 import time
 from typing import Any
 
-from sqlalchemy import select, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.lifecycle import get_uptime_seconds
 from app.core.time import utc_now
-from app.db.models.tool import ToolDefinition
 from app.providers.registry import provider_registry
 from app.realtime.connection_manager import connection_manager
 
@@ -189,21 +188,10 @@ class SystemService:
 
     @classmethod
     async def get_capabilities(cls, session: AsyncSession) -> list[dict[str, Any]]:
-        """List registered system tools and capabilities."""
-        result = await session.execute(select(ToolDefinition).order_by(ToolDefinition.name))
-        tools = result.scalars().all()
+        """List registered system tools and capability inventory states."""
+        from app.tools.registry import tool_registry
 
-        capabilities = []
-        for t in tools:
-            capabilities.append({
-                "name": t.name,
-                "description": t.description,
-                "risk_level": t.risk_level.value if hasattr(t.risk_level, "value") else str(t.risk_level),
-                "requires_approval": t.requires_approval,
-                "is_enabled": t.enabled,
-                "parameters_schema": t.parameters_schema,
-            })
-        return capabilities
+        return tool_registry.diagnose_all_tools()
 
     @classmethod
     def get_system_info(cls) -> dict[str, Any]:
@@ -225,11 +213,53 @@ class SystemService:
                 "sandboxed_browser_automation",
                 "fts5_document_search",
                 "rbac_capability_grants",
+                "self_extending_skill_ecosystem",
+                "github_skill_discovery",
+                "isolated_skill_quarantine",
             ],
             "enabled_integrations": [
                 "ollama_local_llm",
                 "sqlite_fts5",
                 "playwright_browser",
                 "local_whisper_tts",
+                "github_skill_discovery",
             ],
+        }
+
+    @classmethod
+    async def get_hud_telemetry(cls, session: AsyncSession) -> dict[str, Any]:
+        """Return real-time HUD telemetry matching the tactical top-bar and HUD telemetry panels."""
+        status_data = await cls.get_system_status(session)
+        from app.integrations.omni_osint import omni_osint_adapter
+        from app.services.audio import audio_service
+        from app.services.task_service import TaskService
+
+        tasks = await TaskService.list_tasks(session=session, limit=10)
+        running_count = len([t for t in tasks if getattr(t, "status", None) and str(t.status) == "running"])
+
+        return {
+            "systems_status": "ONLINE" if status_data.get("status") == "online" else "DEGRADED",
+            "frequency": "1420.405 MHz",
+            "quantum_matrix": "SYNCED",
+            "grid_protocol": "v8.4",
+            "voice_capture_status": "paused",
+            "mic_state": "MIC OFF",
+            "swipe_state": "SWIPE ON",
+            "active_tasks_count": running_count,
+            "cpu_percent": status_data.get("system_metrics", {}).get("cpu_percent", 0.0),
+            "memory_percent": status_data.get("system_metrics", {}).get("memory_percent", 0.0),
+            "uptime_seconds": status_data.get("application", {}).get("uptime_seconds", 0),
+            "dual_brain": {
+                "left_model": getattr(settings, "FRIDAY_LEFT_MODEL", settings.DEFAULT_LOCAL_MODEL),
+                "right_model": getattr(settings, "FRIDAY_RIGHT_MODEL", "hf.co/RavichandranJ/Dolphin3-Cyber-8B-GGUF:Q4_K_M"),
+                "ready": status_data.get("ai_provider", {}).get("connected", False),
+            },
+            "audio_service": {
+                "ready": audio_service.is_ready,
+                "transcription_provider": audio_service.provider_name,
+            },
+            "osint_service": {
+                "ready": omni_osint_adapter.is_configured,
+                "mode": "live" if omni_osint_adapter.is_configured else "mock",
+            },
         }

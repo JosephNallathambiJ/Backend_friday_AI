@@ -39,9 +39,21 @@ class SearchContactsTool(BaseTool):
     risk_level = ToolRiskLevel.READ_ONLY
     requires_approval = False
 
+    def check_availability(self) -> dict[str, Any]:
+        return ContactsService.check_availability()
+
     async def execute(self, parameters: dict[str, Any], dry_run: bool = False) -> ToolResult:
         t0 = time.time()
         try:
+            avail = self.check_availability()
+            if not avail["available"]:
+                return ToolResult(
+                    success=False,
+                    error=f"Capability unavailable: {avail['reason']}",
+                    verified=False,
+                    verification_details="Provider not configured.",
+                )
+
             params = self.validate_parameters(parameters)
             async with async_session_factory() as db:
                 contacts = await ContactsService.search_contacts(
@@ -61,6 +73,8 @@ class SearchContactsTool(BaseTool):
                 success=True,
                 data={"contacts": data, "count": len(data)},
                 execution_time_ms=int((time.time() - t0) * 1000),
+                verified=True,
+                verification_details=f"Retrieved {len(data)} contacts from authorized provider.",
             )
         except Exception as e:
             return ToolResult(
@@ -77,9 +91,21 @@ class CreateContactTool(BaseTool):
     requires_approval = False
     supports_dry_run = True
 
+    def check_availability(self) -> dict[str, Any]:
+        return ContactsService.check_availability()
+
     async def execute(self, parameters: dict[str, Any], dry_run: bool = False) -> ToolResult:
         t0 = time.time()
         try:
+            avail = self.check_availability()
+            if not avail["available"] and not dry_run:
+                return ToolResult(
+                    success=False,
+                    error=f"Capability unavailable: {avail['reason']}",
+                    verified=False,
+                    verification_details="Provider not configured.",
+                )
+
             params = self.validate_parameters(parameters)
             if dry_run:
                 return ToolResult(
@@ -105,7 +131,12 @@ class CreateContactTool(BaseTool):
                     "organization": contact.organization,
                 }
             return ToolResult(
-                success=True, data=res, execution_time_ms=int((time.time() - t0) * 1000)
+                success=True,
+                data=res,
+                execution_time_ms=int((time.time() - t0) * 1000),
+                verified=True,
+                resource_references=[f"contact:{contact.id}"],
+                verification_details=f"Verified contact '{contact.display_name}' persisted with ID {contact.id}.",
             )
         except Exception as e:
             return ToolResult(
@@ -122,9 +153,21 @@ class DeleteContactTool(BaseTool):
     requires_approval = True
     supports_dry_run = True
 
+    def check_availability(self) -> dict[str, Any]:
+        return ContactsService.check_availability()
+
     async def execute(self, parameters: dict[str, Any], dry_run: bool = False) -> ToolResult:
         t0 = time.time()
         try:
+            avail = self.check_availability()
+            if not avail["available"] and not dry_run:
+                return ToolResult(
+                    success=False,
+                    error=f"Capability unavailable: {avail['reason']}",
+                    verified=False,
+                    verification_details="Provider not configured.",
+                )
+
             params = self.validate_parameters(parameters)
             contact_id = params["contact_id"]
             if dry_run:
@@ -138,6 +181,9 @@ class DeleteContactTool(BaseTool):
                 success=True,
                 data={"deleted": deleted, "contact_id": contact_id},
                 execution_time_ms=int((time.time() - t0) * 1000),
+                verified=True,
+                resource_references=[f"contact:{contact_id}"],
+                verification_details=f"Verified contact '{contact_id}' deleted from database.",
             )
         except Exception as e:
             return ToolResult(

@@ -17,6 +17,30 @@ class BrowserAutomationService:
     _browser_instance: Any = None
 
     @classmethod
+    def check_availability(cls) -> dict[str, Any]:
+        """Check if browser automation engine and Chromium binaries are available."""
+        import importlib.util
+
+        from app.core.config import settings
+
+        if not settings.BROWSER_AUTOMATION_ENABLED:
+            return {
+                "available": False,
+                "status": "NOT_CONFIGURED",
+                "reason": "Browser automation is currently disabled in configuration (BROWSER_AUTOMATION_ENABLED=False).",
+            }
+
+        has_playwright = importlib.util.find_spec("playwright") is not None
+        if not has_playwright:
+            return {
+                "available": False,
+                "status": "NOT_CONFIGURED",
+                "reason": "Playwright is not installed. Install via 'pip install playwright && playwright install chromium'.",
+            }
+
+        return {"available": True, "status": "AVAILABLE", "reason": None}
+
+    @classmethod
     async def _get_browser(cls):
         """Lazy-initialize headless Chromium browser."""
         if cls._browser_instance is not None:
