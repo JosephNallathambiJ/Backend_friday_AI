@@ -23,7 +23,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 async def verify_api_key(
     x_api_key: str | None = Header(None, alias="X-API-Key"),
-) -> None:
+) -> str:
     """Validate API key if configured in settings. Local loopback requests can proceed if API_KEY is unset."""
     if settings.API_KEY:
         if not x_api_key or x_api_key != settings.API_KEY:
@@ -31,3 +31,4 @@ async def verify_api_key(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid or missing API Key (X-API-Key header required).",
             )
+    return "local_user"

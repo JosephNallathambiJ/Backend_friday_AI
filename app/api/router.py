@@ -3,22 +3,28 @@
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    agent_state,
     agents,
     approvals,
     capabilities,
     chat,
+    commands,
     contacts,
     conversations,
+    events,
     git,
     github,
     health,
     integrations,
     memory,
     projects,
+    quick_actions,
     reports,
     schedules,
     security,
+    system,
     tasks,
+    terminal,
     tools,
     voice,
 )
@@ -28,10 +34,16 @@ from app.api.v1 import (
 
 api_router = APIRouter()
 
-# Health endpoints (at root /health/live, /health/ready, /api/v1/status)
+# Health endpoints (at root /health/live, /health/ready, /health, /api/v1/status, /api/v1/health)
 api_router.include_router(health.router)
 
 # Version 1 functional endpoints
+api_router.include_router(system.router, prefix="/api/v1")
+api_router.include_router(agent_state.router, prefix="/api/v1")
+api_router.include_router(commands.router, prefix="/api/v1")
+api_router.include_router(events.router, prefix="/api/v1")
+api_router.include_router(terminal.router, prefix="/api/v1")
+api_router.include_router(quick_actions.router, prefix="/api/v1")
 api_router.include_router(agents.router, prefix="/api/v1")
 api_router.include_router(capabilities.router, prefix="/api/v1")
 api_router.include_router(contacts.router, prefix="/api/v1")

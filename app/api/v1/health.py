@@ -13,6 +13,8 @@ from app.providers.registry import provider_registry
 router = APIRouter(tags=["Health & Status"])
 
 
+@router.get("/health", response_model=HealthResponse)
+@router.get("/api/v1/health", response_model=HealthResponse)
 @router.get("/health/live", response_model=HealthResponse)
 async def liveness_check():
     """Liveness probe indicating process is responsive."""

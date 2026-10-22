@@ -1,10 +1,14 @@
-"""Sanitized settings inspection endpoint."""
+"""Sanitized and persistent settings API endpoints."""
+
+from typing import Any
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import verify_api_key
-from app.core.config import settings
+from app.api.dependencies import get_db, verify_api_key
 from app.domain.schemas import APIResponse
+from app.services.user_settings_service import UserSettingsService
 
 router = APIRouter(
     prefix="/api/v1/settings",
@@ -13,23 +17,45 @@ router = APIRouter(
 )
 
 
+class SettingsPatchRequest(BaseModel):
+    language: str | None = Field(default=None, description="Preferred language code")
+    locale: str | None = Field(default=None, description="Preferred locale tag")
+    theme: str | None = Field(default=None, description="HUD theme identifier")
+    selected_model: str | None = Field(default=None, description="Selected AI model name")
+    voice_provider: str | None = Field(default=None, description="Selected voice provider")
+    selected_voice: str | None = Field(default=None, description="Selected voice name")
+    speech_speed: float | None = Field(default=None, ge=0.5, le=2.0, description="Speech rate")
+    voice_input_enabled: bool | None = None
+    voice_output_enabled: bool | None = None
+    realtime_events_enabled: bool | None = None
+    terminal_profile: str | None = None
+    custom_preferences: dict[str, Any] | None = None
+
+
 @router.get("", response_model=APIResponse)
-async def get_sanitized_settings():
-    """Inspect active system configuration with all secrets strictly redacted."""
-    return APIResponse(
-        data={
-            "app_name": settings.APP_NAME,
-            "app_version": settings.APP_VERSION,
-            "environment": settings.APP_ENV,
-            "debug": settings.DEBUG,
-            "api_host": settings.API_HOST,
-            "api_port": settings.API_PORT,
-            "ollama_base_url": settings.OLLAMA_BASE_URL,
-            "default_local_model": settings.DEFAULT_LOCAL_MODEL,
-            "cloud_ai_enabled": settings.CLOUD_AI_ENABLED,
-            "approved_roots": settings.APPROVED_ROOTS,
-            "allowed_commands": settings.ALLOWED_COMMANDS,
-            "max_orchestration_steps": settings.MAX_ORCHESTRATION_STEPS,
-            "scheduler_enabled": settings.SCHEDULER_ENABLED,
-        }
-    )
+async def get_settings(
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(verify_api_key),
+):
+    """Inspect active user preferences and sanitized system execution settings."""
+    settings_dict = await UserSettingsService.get_settings_dict(db, user_id=user_id)
+    return APIResponse(success=True, data=settings_dict)
+
+
+@router.patch("", response_model=APIResponse)
+async def update_settings(
+    payload: SettingsPatchRequest,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(verify_api_key),
+):
+    """Partially update user HUD preferences with server validation."""
+    updates = payload.model_dump(exclude_unset=True)
+    updated = await UserSettingsService.update_settings(db, updates=updates, user_id=user_id)
+    return APIResponse(success=True, data=updated)
+
+
+@router.get("/options", response_model=APIResponse)
+async def get_settings_options():
+    """Return permitted options and dynamic models/voices for the settings modal."""
+    options = await UserSettingsService.get_settings_options()
+    return APIResponse(success=True, data=options)

@@ -13,7 +13,9 @@ from app.db.models.project import Project, ProjectDirectoryGrant
 from app.db.models.schedule import JobExecutionHistory, ScheduledJob
 from app.db.models.security import SecurityFinding, SecurityReport
 from app.db.models.task import Task, TaskEvent
+from app.db.models.terminal import TerminalCommandHistory, TerminalSession
 from app.db.models.tool import ToolDefinition, ToolExecutionRecord
+from app.db.models.user_settings import UserSettingsRecord
 
 __all__ = [
     "Base",
@@ -30,6 +32,9 @@ __all__ = [
     "ApprovalRequest",
     "ToolDefinition",
     "ToolExecutionRecord",
+    "TerminalSession",
+    "TerminalCommandHistory",
+    "UserSettingsRecord",
     "MemoryRecord",
     "DocumentIndex",
     "DocumentChunk",
