@@ -45,7 +45,18 @@ class AppSettings(BaseSettings):
     COMMAND_TIMEOUT_SECONDS: float = 30.0
     APPROVED_ROOTS: list[str] = Field(default_factory=lambda: [str(Path.cwd().resolve())])
     ALLOWED_COMMANDS: list[str] = Field(
-        default_factory=lambda: ["git", "pytest", "ruff", "python3", "ls", "pwd", "echo"]
+        default_factory=lambda: [
+            "git",
+            "pytest",
+            "ruff",
+            "python",
+            "python3",
+            "ls",
+            "pwd",
+            "echo",
+            "uname",
+            "whoami",
+        ]
     )
 
     # Scheduler & Background Tasks

@@ -43,6 +43,8 @@ friday.db*
 friday_test.db*
 logs/
 data/
+.friday_trash/
+
 
 # Testing & Coverage
 .pytest_cache/

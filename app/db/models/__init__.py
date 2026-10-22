@@ -1,8 +1,11 @@
 """Database models package."""
 
 from app.db.base import Base
+from app.db.models.agent import AgentRun, AgentRunEvent
 from app.db.models.approval import ApprovalRequest
 from app.db.models.audit import AuditEvent
+from app.db.models.capability import CapabilityGrant
+from app.db.models.contact import ContactRecord
 from app.db.models.conversation import Conversation, Message
 from app.db.models.document import DocumentChunk, DocumentIndex
 from app.db.models.memory import MemoryRecord
@@ -14,6 +17,10 @@ from app.db.models.tool import ToolDefinition, ToolExecutionRecord
 
 __all__ = [
     "Base",
+    "AgentRun",
+    "AgentRunEvent",
+    "CapabilityGrant",
+    "ContactRecord",
     "Conversation",
     "Message",
     "Project",

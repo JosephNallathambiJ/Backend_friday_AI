@@ -16,6 +16,8 @@ dependencies = [
     "alembic>=1.13.3",
     "croniter>=2.0.0",
     "python-multipart>=0.0.12",
+    "beautifulsoup4>=4.15.0",
+    "playwright>=1.64.0",
 ]
 
 [project.optional-dependencies]

@@ -86,3 +86,65 @@ async def decide_approval(
             decision_reason=a.decision_reason,
         )
     )
+
+
+@router.post("/{approval_id}/approve", response_model=APIResponse)
+async def approve_action(
+    approval_id: str,
+    reason: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Explicitly approve a pending action."""
+    from app.domain.enums import ApprovalStatus
+
+    a = await ApprovalService.decide_approval(
+        session=db,
+        approval_id=approval_id,
+        decision=ApprovalStatus.APPROVED,
+        reason=reason or "Approved by user.",
+    )
+    return APIResponse(
+        data=ApprovalRead(
+            id=a.id,
+            task_id=a.task_id,
+            tool_name=a.tool_name,
+            action_description=a.action_description,
+            risk_level=a.risk_level,
+            arguments_redacted=a.arguments_redacted,
+            status=a.status,
+            created_at=a.created_at,
+            expires_at=a.expires_at,
+            decision_reason=a.decision_reason,
+        )
+    )
+
+
+@router.post("/{approval_id}/reject", response_model=APIResponse)
+async def reject_action(
+    approval_id: str,
+    reason: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Explicitly reject a pending action."""
+    from app.domain.enums import ApprovalStatus
+
+    a = await ApprovalService.decide_approval(
+        session=db,
+        approval_id=approval_id,
+        decision=ApprovalStatus.REJECTED,
+        reason=reason or "Rejected by user.",
+    )
+    return APIResponse(
+        data=ApprovalRead(
+            id=a.id,
+            task_id=a.task_id,
+            tool_name=a.tool_name,
+            action_description=a.action_description,
+            risk_level=a.risk_level,
+            arguments_redacted=a.arguments_redacted,
+            status=a.status,
+            created_at=a.created_at,
+            expires_at=a.expires_at,
+            decision_reason=a.decision_reason,
+        )
+    )

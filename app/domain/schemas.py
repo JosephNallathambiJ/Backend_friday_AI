@@ -174,6 +174,7 @@ class ToolRead(BaseModel):
     description: str
     risk_level: ToolRiskLevel
     requires_approval: bool
+    required_capabilities: list[str] = Field(default_factory=list)
     parameters_schema: dict[str, Any]
 
 
@@ -252,3 +253,168 @@ class ScheduleRead(BaseModel):
     last_run_at: datetime | None = None
     next_run_at: datetime | None = None
     created_at: datetime
+
+
+# Agent Runtime & Planning
+class PlanStep(BaseModel):
+    step_id: str
+    description: str
+    tool_name: str | None = None
+    tool_parameters: dict[str, Any] = Field(default_factory=dict)
+    required_capabilities: list[str] = Field(default_factory=list)
+    requires_approval: bool = False
+    status: str = "pending"  # pending, in_progress, completed, failed, skipped
+
+
+class ExecutionPlan(BaseModel):
+    goal: str
+    constraints: list[str] = Field(default_factory=list)
+    missing_information: list[str] = Field(default_factory=list)
+    steps: list[PlanStep] = Field(default_factory=list)
+    estimated_duration_seconds: int = 60
+
+
+class AgentRunCreate(BaseModel):
+    goal: str
+    agent_type: str = "orchestrator"
+    project_id: str | None = None
+    conversation_id: str | None = None
+    max_steps: int = 25
+    max_duration_seconds: int = 300
+    max_tool_calls: int = 50
+
+
+class AgentRunEventRead(BaseModel):
+    id: str
+    run_id: str
+    event_type: str
+    message: str
+    payload: dict[str, Any] | None = None
+    created_at: datetime
+
+
+class AgentRunRead(BaseModel):
+    id: str
+    agent_type: str
+    status: str
+    goal: str
+    project_id: str | None = None
+    conversation_id: str | None = None
+    plan: ExecutionPlan | None = None
+    execution_budget: dict[str, Any]
+    current_step_index: int
+    result_summary: str | None = None
+    error_message: str | None = None
+    cancellation_requested: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+# Capabilities & Permissions
+class CapabilityGrantRequest(BaseModel):
+    capability: str
+    scope_type: str = "global"
+    scope_value: str = "*"
+
+
+class CapabilityRevokeRequest(BaseModel):
+    capability: str
+    scope_type: str = "global"
+    scope_value: str = "*"
+
+
+class CapabilityGrantRead(BaseModel):
+    id: str
+    capability: str
+    scope_type: str
+    scope_value: str
+    is_granted: bool
+    granted_by: str
+    created_at: datetime
+    revoked_at: datetime | None = None
+
+
+class CapabilityInspectionRead(BaseModel):
+    capability: str
+    description: str
+    is_granted: bool
+    scopes: list[str] = Field(default_factory=list)
+
+
+# Contacts
+class ContactCreate(BaseModel):
+    display_name: str
+    given_name: str | None = None
+    family_name: str | None = None
+    organization: str | None = None
+    emails: list[str] = Field(default_factory=list)
+    phones: list[str] = Field(default_factory=list)
+    labels: list[str] = Field(default_factory=list)
+
+
+class ContactUpdate(BaseModel):
+    display_name: str | None = None
+    given_name: str | None = None
+    family_name: str | None = None
+    organization: str | None = None
+    emails: list[str] | None = None
+    phones: list[str] | None = None
+    labels: list[str] | None = None
+
+
+class ContactRead(BaseModel):
+    id: str
+    display_name: str
+    given_name: str | None = None
+    family_name: str | None = None
+    organization: str | None = None
+    emails: list[str]
+    phones: list[str]
+    labels: list[str]
+    provider_id: str
+    created_at: datetime
+    updated_at: datetime
+
+
+# Device & Integrations
+class DeviceCapabilityRead(BaseModel):
+    os_name: str
+    os_version: str
+    platform: str
+    architecture: str
+    cpu_count: int
+    memory_total_gb: float
+    supported_adapters: list[str]
+
+
+class AppLaunchRequest(BaseModel):
+    app_name: str
+    arguments: list[str] = Field(default_factory=list)
+
+
+class NotificationRequest(BaseModel):
+    title: str
+    message: str
+    subtitle: str | None = None
+
+
+# Browser Automation
+class BrowserNavigateRequest(BaseModel):
+    url: str
+    wait_until: str = "load"
+    timeout_seconds: int = 30
+
+
+class BrowserReadResponse(BaseModel):
+    url: str
+    title: str
+    text_content: str
+    links: list[dict[str, str]] = Field(default_factory=list)
+    metadata: dict[str, str] = Field(default_factory=dict)
+
+
+class BrowserInteractRequest(BaseModel):
+    url: str
+    action: str  # click, fill, select, submit
+    selector: str
+    value: str | None = None

@@ -17,19 +17,29 @@ router = APIRouter(
 @router.get("", response_model=APIResponse)
 async def list_tools():
     """List all registered tools, their schemas, risk classifications, and approval rules."""
+    from pydantic import BaseModel
+
     tools = tool_registry.list_tools()
-    return APIResponse(
-        data=[
+    items = []
+    for t in tools:
+        if isinstance(t.input_schema, type) and issubclass(t.input_schema, BaseModel):
+            schema = t.input_schema.model_json_schema()
+        elif isinstance(t.input_schema, dict):
+            schema = t.input_schema
+        else:
+            schema = getattr(t, "parameters_schema", {})
+
+        items.append(
             ToolRead(
                 name=t.name,
                 description=t.description,
                 risk_level=t.risk_level,
                 requires_approval=t.requires_approval,
-                parameters_schema=t.parameters_schema,
+                required_capabilities=t.required_capabilities,
+                parameters_schema=schema,
             )
-            for t in tools
-        ]
-    )
+        )
+    return APIResponse(data=items)
 
 
 @router.post("/execute", response_model=APIResponse)

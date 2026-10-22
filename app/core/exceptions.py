@@ -53,3 +53,8 @@ class ProviderError(FridayException):
 class TaskCancelledError(FridayException):
     def __init__(self, message: str = "Task execution was cancelled"):
         super().__init__(message, code="TASK_CANCELLED", status_code=409)
+
+
+class DependencyMissingError(FridayException):
+    def __init__(self, message: str, details: dict[str, Any] | None = None):
+        super().__init__(message, code="DEPENDENCY_MISSING", status_code=503, details=details)

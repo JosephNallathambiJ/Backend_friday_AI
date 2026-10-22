@@ -3,12 +3,16 @@
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    agents,
     approvals,
+    capabilities,
     chat,
+    contacts,
     conversations,
     git,
     github,
     health,
+    integrations,
     memory,
     projects,
     reports,
@@ -28,6 +32,10 @@ api_router = APIRouter()
 api_router.include_router(health.router)
 
 # Version 1 functional endpoints
+api_router.include_router(agents.router, prefix="/api/v1")
+api_router.include_router(capabilities.router, prefix="/api/v1")
+api_router.include_router(contacts.router, prefix="/api/v1")
+api_router.include_router(integrations.router, prefix="/api/v1")
 api_router.include_router(conversations.router)
 api_router.include_router(chat.router)
 api_router.include_router(projects.router)

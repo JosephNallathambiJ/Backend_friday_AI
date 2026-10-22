@@ -68,3 +68,24 @@ def validate_command(
                 raise SecurityPolicyError(
                     "Command chaining and subshell operators are prohibited in arguments."
                 )
+
+
+class CommandPolicyError(SecurityPolicyError):
+    """Raised when a command violates the command security policy."""
+
+    pass
+
+
+class CommandPolicy:
+    """Helper for command validation."""
+
+    @staticmethod
+    def is_executable_allowed(executable: str) -> bool:
+        exec_name = Path(executable).name.lower()
+        if exec_name in PROHIBITED_COMMANDS:
+            return False
+        return exec_name in settings.ALLOWED_COMMANDS
+
+    @staticmethod
+    def validate_command(executable: str, args: list[str] | None = None) -> None:
+        validate_command(executable, args)
